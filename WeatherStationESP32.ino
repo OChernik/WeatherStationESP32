@@ -1,7 +1,7 @@
 // Датчик HDC1080       SDA - 21, SCL - 22
 // Датчик SHT31D        SDA - 21, SCL - 22
 // Экран SSH1106 1,3''  SDA - 21, SCL - 22
-// Esp32 с антенной 192.168.31.107, ESP324022D803F9F4
+// Esp32 с антенной IP 192.168.**.***, *******************
 //
 #define sensorReadPeriod 2000 // период между опросом датчика в мс.
 #define openMonPeriod 300000  // период между отправкой данных на сервер ОМ в мс.
@@ -31,7 +31,7 @@
 // ClosedCube_HDC1080 hdc1080;             // создание объекта датчика HDC1080
 Adafruit_SHT31 sht31 = Adafruit_SHT31();   // создание объекта датчика sht31d
 GyverOLED<SSH1106_128x64> oled;            // создание объекта экрана SSH1106 1,3''
-// GyverHub hub("ChernikDevices", "Basement_ESP32", "");
+// GyverHub hub("MyDevices", "*********", "");
 
 float Temperature;
 float Humidity;
@@ -47,10 +47,10 @@ uint32_t PingTmr = 0;       // переменная таймера пинга
 
 // EEManager memory(humCorrection, 2000); // передаём переменную в менеджер EEPROM. 2000 ms таймаут обновления
 
-// const char* ssid = "zelenaya.net3";
-// const char* password = "18fev1985";
-const char* ssid = "Koltsevaya_15";
-const char* password = "vibrometr";
+// const char* ssid = "**********";
+// const char* password = "**********";
+const char* ssid = "**********";
+const char* password = "**********";
 // WiFiServer server(80);
 
 // это наш билдер. Он будет вызываться библиотекой
@@ -208,7 +208,7 @@ void loop() {
   if (millis() - openMonTmr >= openMonPeriod) {                            // Если прошло время, и можно отправлять - работаем.
     openMonTmr = millis();                                                 // сбрасываем таймер отправки данных
     String buf;                                                            // Буфер для отправки
-    buf += F("http://open-monitoring.online/get?cid=2661&key=K9nZKZ&p1="); //OpenMonitoring: формируем заголовок
+    buf += F("http://open-monitoring.online/get?cid=****&key=*********="); //OpenMonitoring: формируем заголовок
     buf += Temperature;                                                    //OpenMonitoring: вывод температуры подвала
     buf += F("&p2=");
     buf += Humidity;                                                       //OpenMonitoring: вывод влажности подвала
@@ -226,7 +226,7 @@ void loop() {
     buf += F("#ESP32");
     buf += WiFi.macAddress();
     buf += F("\r\n");
-    buf.replace(":", "");                               // ESP324022D803F9F4  // идентификатор прибора
+    buf.replace(":", "");                               // ****************  // идентификатор прибора
     buf += F("#Temp1#");
     buf += Temperature;
     buf += F("#Подвал\r\n");                            //NarodMon: вывод температуры подвала
