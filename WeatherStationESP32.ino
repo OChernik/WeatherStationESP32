@@ -7,7 +7,9 @@
 #define openMonPeriod 300000  // период между отправкой данных на сервер ОМ в мс.
 #define narodMonPeriod 600000 // период между отправкой данных на сервер NM в мс.
 #define checkWifiPeriod 30000 // период проверки состояния WiFi соединения в мс.
-#define PingPeriod 63000      // период измерения пинга
+#define pingPeriod 63000      // период измерения пинга
+#define heatPeriod 24*60*60*1000L // период включения нагрева датчика - раз в сутки
+#define heatTime 300000       // время, на которое включается нагрев датчика
 #define INIT_KEY 50           // ключ первого запуска EEPROM. 0-254, на выбор
 #define INIT_ADDR 0           // номер ячейки для хранения ключа
 #define WDT_TIMEOUT 30        // 30 секунд отсутствия отклика для перезагрузки через WDT
@@ -20,8 +22,8 @@
 #include "Adafruit_SHT31.h"
 #include <ESPmDNS.h>
 #include <WiFiUdp.h>
-#include <ArduinoOTA.h>
-#include <GyverOLED.h> //библиотека дисплея 
+#include <ArduinoOTA.h>  //бибилотека ОТА обновления по WiFi 
+#include <GyverOLED.h>   //библиотека дисплея 
 #include <Arduino.h>
 // #include <GyverHub.h>
 #include <EEPROM.h>
@@ -42,7 +44,9 @@ uint32_t sensorReadTmr = 0; // переменная таймера опроса 
 uint32_t openMonTmr = 0;    // переменная таймера отсылки данных на сервер Open Monitoring
 uint32_t narodMonTmr = 0;   // переменная таймера отсылки данных на сервер NarodMon
 uint32_t checkWifiTmr = 0;  // переменная таймера  соединения WiFi
-uint32_t PingTmr = 0;       // переменная таймера пинга
+uint32_t pingTmr = 0;       // переменная таймера пинга
+uint32_t heatTmr = millis(); // переменная таймера нагрева датчика
+bool heatFlag = 0;          // флаг нагрева датчика
 
 
 // EEManager memory(humCorrection, 2000); // передаём переменную в менеджер EEPROM. 2000 ms таймаут обновления
@@ -160,11 +164,18 @@ void loop() {
   ArduinoOTA.handle();  // Включаем поддержку ОТА
 
   // hub.tick();           // обязательно тикаем тут для нормальной работы конструктора интерфейса
-
   // memory.tick();        // здесь произойдёт запись EEPROM по встроенному таймеру
-   
-  if (millis() - PingTmr >= PingPeriod) {   // периодически измеряем время пинга  
-    PingTmr = millis();                     // сброс таймера
+  
+  // с периодом heatPeriod включаем прогрев датчика на время heatTime
+  // начальные значения heatFlag = 0, heatTmr = millis()
+  if (millis() - heatTmr >= (heatFlag ? heatTime : heatPeriod)) {       
+    heatTmr = millis();                     // сброс таймера
+    heatFlag = !heatFlag;                   // переключаем флаг
+    sht31.heater(heatFlag);                 // переключаем нагрев датчика
+  } // end If
+  
+  if (millis() - pingTmr >= pingPeriod) {   // периодически измеряем время пинга  
+    pingTmr = millis();                     // сброс таймера
     bool p = Ping.ping(WiFi.gatewayIP());   // пингуем роутер  
     if (p) {                                // если пинг проходит  
       Png = (uint8_t)Ping.averageTime();    // присваиваем среднее время пинга
@@ -244,16 +255,19 @@ void loop() {
 
 }  // end Loop
 
-// Процедура showScreen() выводит на экран значения температуры, влажности, пинг WiFi и значение RSSI
+//_____________________________________________________________________________________________________
+// Процедура showScreen() выводит на экран значения температуры, состояние подогрева датчика, 
+// влажности, пинг WiFi и значение RSSI
 void showScreen() {
     oled.clear();                         // очищаем дисплей
     oled.setScale(2);                     // масштаб текста (1..4)
     oled.setCursor(0, 0);                 // курсор на начало 1 строки
-    oled.print("Hum  ");                  // вывод Hum 
+    oled.print("H  ");                    // вывод H 
     oled.print(Humidity, 1);              // вывод значения Humidity
     oled.setCursor(0, 2);                 // курсор на начало 2 строки
-    oled.print("Temp ");                  // вывод Темп
-    oled.print(Temperature, 1);           // вывод значения Temperature.
+    oled.print("T ");                     // вывод Т
+    oled.print(Temperature, 1);           // вывод значения Temperature
+    oled.print((heatFlag) ? " On" : " Off"); // вывод "On" если датчик греется
     oled.setCursor(0, 4);                 // курсор на начало 3 строки
     if (Png > 0) {                        // если существует значение пинга
        oled.print("Ping ");               // вывод Ping           
@@ -266,3 +280,6 @@ void showScreen() {
     oled.print(rssi);                     // вывод значения RSSI.
     oled.update();    // Вывод содержимого буфера на дисплей. Только при работе с буфером.
 } // end showScreen
+
+
+
