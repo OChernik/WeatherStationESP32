@@ -190,8 +190,8 @@ void loop() {
     heatFlag = 1;
     sensors_event_t humidity, temp;                                  // Adafruit_SHT4x.h
     sht41.getEvent(&humidity, &temp);                                // Adafruit_SHT4x.h
-    float tempTemperature = temp.temperature;                        // Adafruit_SHT4x.h
-    float tempHumidity = humidity.relative_humidity + humCorrection; // Adafruit_SHT4x.h  
+    float Temperature = temp.temperature;                            // Adafruit_SHT4x.h
+    float Humidity = humidity.relative_humidity + humCorrection;     // Adafruit_SHT4x.h  
     showScreen();                      // вывод показаний датчиков на экран
     sht41.setHeater(SHT4X_NO_HEATER);    // выключаем нагрев датчика SHT41 
     heatFlag = 0;
