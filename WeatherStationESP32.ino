@@ -8,9 +8,9 @@
 #define narodMonPeriod 600000 // период между отправкой данных на сервер NM в мс.
 #define checkWifiPeriod 30000 // период проверки состояния WiFi соединения в мс.
 #define pingPeriod 63000      // период измерения пинга
-#define heatPeriod 24*60*60*1000L // период включения нагрева датчика (время МЕЖДУ включениями)
-#define heatTime 5*60*1000L   // время, на которое включается нагрев датчика
-#define heat41Period 60*1000L // период включения нагрева SHT41 - раз в 60 секунд
+#define heatPeriod 24*60*60*1000L // период включения нагрева датчика SHT31 (время МЕЖДУ включениями)
+#define heatTime 5*60*1000L   // время, на которое включается нагрев датчика SHT31
+#define heat41Period 55*1000L // период включения нагрева SHT41 
 #define INIT_KEY 50           // ключ первого запуска EEPROM. 0-254, на выбор
 #define INIT_ADDR 0           // номер ячейки для хранения ключа
 #define WDT_TIMEOUT 30        // 30 секунд отсутствия отклика для перезагрузки через WDT
@@ -215,8 +215,9 @@ void loop() {
   // if (tmr) hub.sendUpdate("Rssi");
   // if (tmr) hub.sendUpdate("Ping");
   // if (tmr) hub.sendUpdate("DeltaHum");
-  
-  if (millis() - sensorReadTmr >= sensorReadPeriod){     // если пришло время опроса датчиков
+
+  // если пришло время опроса датчиков и прошло больше 30 секунд с момента импульса нагрева датчика
+  if ((millis() - sensorReadTmr >= sensorReadPeriod) && (millis() - heat41Tmr >= 30000)){     
     sensorReadTmr = millis();                            // сброс таймера
     // float tempTemperature = sht31.readTemperature();
     // float tempHumidity = sht31.readHumidity() + humCorrection;
