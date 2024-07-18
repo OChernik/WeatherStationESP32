@@ -2,11 +2,11 @@
 // Экран SSH1106 1,3''  SDA - 21, SCL - 22
 // Esp32 с антенной ****************************
 //
-#define sensorReadPeriod 1000 // период между опросом датчика в мс.
-#define openMonPeriod 300000  // период между отправкой данных на сервер ОМ в мс.
-#define narodMonPeriod 600000 // период между отправкой данных на сервер NM в мс.
-#define checkWifiPeriod 30000 // период проверки состояния WiFi соединения в мс.
-#define pingPeriod 63000      // период измерения пинга
+#define sensorReadPeriod 1000      // период между опросом датчика в мс.
+#define openMonPeriod 5*60*1000L   // период между отправкой данных на сервер ОМ в мс.
+#define narodMonPeriod 10*60*1000L // период между отправкой данных на сервер NM в мс.
+#define checkWifiPeriod 30*1000L   // период проверки состояния WiFi соединения в мс.
+#define pingPeriod 63*1000L        // период измерения пинга
 #define heat3xPeriod 24*60*60*1000L // период включения нагрева датчика SHT3x (время МЕЖДУ включениями)
 #define heat3xTime 5*60*1000L // время, на которое включается нагрев датчика SHT3x
 #define heat4xPeriod 57*1000L // период включения нагрева SHT4x 
@@ -212,8 +212,8 @@ void loop() {
   // if (tmr) hub.sendUpdate("Ping");
   // if (tmr) hub.sendUpdate("DeltaHum");
 
-  // если пришло время опроса датчиков и прошло больше 40 секунд с момента импульса нагрева датчика
-  if ((millis() - sensorReadTmr >= sensorReadPeriod) && (millis() - heat4xTmr >= 40000)){     
+  // если пришло время опроса датчиков 
+  if (millis() - sensorReadTmr >= sensorReadPeriod){     
     sensorReadTmr = millis();                            // сброс таймера
     // float tempTemperature = sht3x.readTemperature();
     // float tempHumidity = sht3x.readHumidity() + humCorrection;
@@ -224,7 +224,7 @@ void loop() {
 
     rssi = WiFi.RSSI();
     // если считанные показания разумны
-    if ((tempTemperature < 30) && (tempTemperature > 5) && (tempHumidity < 93) && (tempHumidity > 20)) {
+    if ((tempTemperature < 100) && (tempTemperature > 5) && (tempHumidity < 93) && (tempHumidity > 20)) {
       Temperature = tempTemperature;
       Humidity = tempHumidity;
       showScreen();                      // вывод показаний датчиков на экран
@@ -238,8 +238,9 @@ void loop() {
     WiFi.disconnect();
     initWiFi();                          // установили соединение WiFi
   }
- 
-  if (millis() - openMonTmr >= openMonPeriod) {                            // Если прошло время, и можно отправлять - работаем.
+
+  // Если пришло время очередной отправки и прошло заданное время с момента последнего нагрева датчика 
+  if ((millis() - openMonTmr) >= openMonPeriod && (millis() - heat4xTmr >= heat4xPeriod - 4000)) {                            
     openMonTmr = millis();                                                 // сбрасываем таймер отправки данных
     String buf;                                                            // Буфер для отправки
     buf += F("http://open-monitoring.online/get?cid=2661&key="*******";"); //OpenMonitoring: формируем заголовок
@@ -254,8 +255,8 @@ void loop() {
     http.end();                                                         // Free resources
   }                                                                     // end if (sendtoOM)
 
-  // Если датчик не греется, прошел заданный период и можно отправлять - работаем.
-  if (!heatFlag && (millis() - narodMonTmr >= narodMonPeriod)) {      
+  // Если пришло время очередной отправки и прошло заданное время с момента последнего нагрева датчика 
+  if ((millis() - narodMonTmr >= narodMonPeriod) && (millis() - heat4xTmr >= heat4xPeriod - 4000)) {      
     narodMonTmr = millis();                            // сбрасываем таймер отправки данных
     String buf;                                        // Буфер для отправки
     buf += F("#ESP32");
