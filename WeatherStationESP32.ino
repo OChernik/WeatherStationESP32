@@ -1,16 +1,16 @@
 // Датчик HDC1080       SDA - 21, SCL - 22
 // Датчик SHT31D        SDA - 21, SCL - 22
 // Экран SSH1106 1,3''  SDA - 21, SCL - 22
-// Esp32 с антенной IP 192.168.**.***, *******************
+// Esp32 с антенной ****************************
 //
 #define sensorReadPeriod 2000 // период между опросом датчика в мс.
 #define openMonPeriod 300000  // период между отправкой данных на сервер ОМ в мс.
 #define narodMonPeriod 600000 // период между отправкой данных на сервер NM в мс.
 #define checkWifiPeriod 30000 // период проверки состояния WiFi соединения в мс.
 #define pingPeriod 63000      // период измерения пинга
-#define heatPeriod 24*60*60*1000L // период МЕЖДУ включениями нагрева датчика
-#define heatTime 300000       // время, на которое включается нагрев датчика
-#define heat41Period 10000    // период включения нагрева SHT41 - раз в 10 секунд
+#define heatPeriod 24*60*60*1000L // период включения нагрева датчика (время МЕЖДУ включениями)
+#define heatTime 5*60*1000L   // время, на которое включается нагрев датчика
+#define heat41Period 60*1000L // период включения нагрева SHT41 - раз в 60 секунд
 #define INIT_KEY 50           // ключ первого запуска EEPROM. 0-254, на выбор
 #define INIT_ADDR 0           // номер ячейки для хранения ключа
 #define WDT_TIMEOUT 30        // 30 секунд отсутствия отклика для перезагрузки через WDT
@@ -19,8 +19,8 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <Wire.h>
-#include "Adafruit_SHT31.h"
-// #include "Adafruit_SHT4x.h"     // библиотека датчиков температуры и влажности SHT4х - может нагревать SHT4x
+// #include "Adafruit_SHT31.h"
+#include "Adafruit_SHT4x.h"     // библиотека датчиков температуры и влажности SHT4х - может нагревать SHT4x
 // #include "ClosedCube_HDC1080.h"
 #include <ESPmDNS.h>
 #include <WiFiUdp.h>
@@ -33,31 +33,31 @@
 // #include <EEManager.h>  // Gyver lib 
 
 // ClosedCube_HDC1080 sensor;                // создание объекта датчика HDC1080
-Adafruit_SHT31 sensor = Adafruit_SHT31();    // создание объекта датчика sht31d
-// Adafruit_SHT4x sensor = Adafruit_SHT4x(); // создание объекта датчика SHT41 библиотеки Adafruit_SHT4x.h
+// Adafruit_SHT31 sht31 = Adafruit_SHT31();    // создание объекта датчика sht31d
+Adafruit_SHT4x sht41 = Adafruit_SHT4x(); // создание объекта датчика SHT41 библиотеки Adafruit_SHT4x.h
 GyverOLED<SSH1106_128x64> oled;              // создание объекта экрана SSH1106 1,3''
 // GyverHub hub("MyDevices", "*********", "");
 
 float Temperature;
-float Humidity;
+float Humidity = 50;
 uint8_t Png = 1;              // переменная измеренного значения пинга, мс
 int8_t rssi;
-int8_t humCorrection = 1 ;  // начальная поправка измеренного значения влажности
+int8_t humCorrection = 0 ;  // начальная поправка измеренного значения влажности
 uint32_t sensorReadTmr = 0; // переменная таймера опроса датчиков
 uint32_t openMonTmr = 0;    // переменная таймера отсылки данных на сервер Open Monitoring
 uint32_t narodMonTmr = 0;   // переменная таймера отсылки данных на сервер NarodMon
 uint32_t checkWifiTmr = 0;  // переменная таймера  соединения WiFi
-uint32_t pingTmr = 0;       // переменная таймера пинга
+uint32_t PingTmr = 0;       // переменная таймера пинга
 uint32_t heatTmr = millis(); // переменная таймера нагрева датчика
 uint32_t heat41Tmr = 0;      // переменная таймера нагрева датчика SHT41
 bool heatFlag = 0;           // флаг нагрева датчика
 
 // EEManager memory(humCorrection, 2000); // передаём переменную в менеджер EEPROM. 2000 ms таймаут обновления
 
-// const char* ssid = "**********";
-// const char* password = "**********";
-const char* ssid = "**********";
-const char* password = "**********";
+// const char* ssid = "************";
+// const char* password = ""************";";
+const char* ssid = ""************";";
+const char* password = ""************";";
 // WiFiServer server(80);
 
 // это наш билдер. Он будет вызываться библиотекой
@@ -117,10 +117,11 @@ void setup() {
   }  
   
   Serial.begin(115200);
-  sensor.begin(0x44);          // Adafruit_SHT31.h
-  // sensor.begin();           // Adafruit_SHT4x.h
-  // sensor.setPrecision(SHT4X_HIGH_PRECISION); // Adafruit_SHT4x.h
-  // hdc1080.begin(0x40);      // HDC1080
+  // hdc1080.begin(0x40);
+  // sht31.begin(0x44);                     // I2C address: 0x44 or 0x45
+  sht41.begin();                            // Adafruit_SHT4x.h
+  sht41.setPrecision(SHT4X_HIGH_PRECISION); // Adafruit_SHT4x.h
+  sht41.setHeater(SHT4X_NO_HEATER);         // Adafruit_SHT4x.h
   oled.textMode(BUF_REPLACE);  // вывод текста на экран с заменой символов
   oled.init();                 // инициализация дисплея
   
@@ -169,26 +170,35 @@ void loop() {
   ArduinoOTA.handle();  // Включаем поддержку ОТА
 
   // hub.tick();           // обязательно тикаем тут для нормальной работы конструктора интерфейса
+
   // memory.tick();        // здесь произойдёт запись EEPROM по встроенному таймеру
-  
+
   // с периодом heatPeriod включаем прогрев датчика SHT31 на время heatTime
   // начальные значения heatFlag = 0, heatTmr = millis()
-  if (millis() - heatTmr >= (heatFlag ? heatTime : heatPeriod)) {       
-    heatTmr = millis();                     // сброс таймера
-    heatFlag = !heatFlag;                   // переключаем флаг состояния нагрева датчика
-    sensor.heater(heatFlag);                // переключаем нагрев датчика Adafruit_SHT31.h        
-  } // end If
+  // if (millis() - heatTmr >= (heatFlag ? heatTime : heatPeriod)) {       
+  //  heatTmr = millis();                     // сброс таймера
+  //  heatFlag = !heatFlag;                   // переключаем флаг состояния нагрева датчика
+   // sht31.heater(heatFlag);                // переключаем нагрев датчика Adafruit_SHT31.h        
+  // } // end If
 
-  // подогреваем датчик SHT41 если heatFlag = true чтобы он грелся 10% времени  
+  // подогреваем датчик SHT41 если Humidity > 75 
   // с периодом heat41Period включаем прогрев датчика SHT41 на 1 секунду  
   // начальные значения heat41Tmr = 0
-  if (heatFlag && (millis() - heat41Tmr >= heat41Period)) {       
-     heat41Tmr = millis();                     // сброс таймера
-     sensor.setHeater(SHT4X_HIGH_HEATER_1S);   // включаем нагрев датчика SHT41 на 1 секунду        
+  if ((Humidity > 77) && (millis() - heat41Tmr >= heat41Period)) {       
+    heat41Tmr = millis();                     // сброс таймера
+    sht41.setHeater(SHT4X_HIGH_HEATER_1S);    // включаем режим максимального нагрева датчика SHT41 на 1 секунду 
+    heatFlag = 1;
+    sensors_event_t humidity, temp;                                  // Adafruit_SHT4x.h
+    sht41.getEvent(&humidity, &temp);                                // Adafruit_SHT4x.h
+    float tempTemperature = temp.temperature;                        // Adafruit_SHT4x.h
+    float tempHumidity = humidity.relative_humidity + humCorrection; // Adafruit_SHT4x.h  
+    showScreen();                      // вывод показаний датчиков на экран
+    sht41.setHeater(SHT4X_NO_HEATER);    // выключаем нагрев датчика SHT41 
+    heatFlag = 0;
   } // end If
-  
-  if (millis() - pingTmr >= pingPeriod) {   // периодически измеряем время пинга  
-    pingTmr = millis();                     // сброс таймера
+
+  if (millis() - PingTmr >= pingPeriod) {   // периодически измеряем время пинга  
+    PingTmr = millis();                     // сброс таймера
     bool p = Ping.ping(WiFi.gatewayIP());   // пингуем роутер  
     if (p) {                                // если пинг проходит  
       Png = (uint8_t)Ping.averageTime();    // присваиваем среднее время пинга
@@ -208,12 +218,15 @@ void loop() {
   
   if (millis() - sensorReadTmr >= sensorReadPeriod){     // если пришло время опроса датчиков
     sensorReadTmr = millis();                            // сброс таймера
-    float tempTemperature = sensor.readTemperature();           // Adafruit_SHT31.h ClosedCube_HDC1080.h
-    float tempHumidity = sensor.readHumidity() + humCorrection; // Adafruit_SHT31.h ClosedCube_HDC1080.h
-    // sensors_event_t humidity, temp;                          // Adafruit_SHT4x.h
-    // sensor.getEvent(&humidity, &temp);                       // Adafruit_SHT4x.h
-    // float tempTemperature = temp.temperature;                // Adafruit_SHT4x.h
-    // float tempHumidity = humidity.relative_humidity + humCorrection; // Adafruit_SHT4x.h
+    // float tempTemperature = sht31.readTemperature();
+    // float tempHumidity = sht31.readHumidity() + humCorrection;
+    // float tempTemperature = hdc1080.readTemperature();
+    // float tempHumidity = hdc1080.readHumidity() + humCorrection;
+    sensors_event_t humidity, temp;                                  // Adafruit_SHT4x.h
+    sht41.getEvent(&humidity, &temp);                                // Adafruit_SHT4x.h
+    float tempTemperature = temp.temperature;                        // Adafruit_SHT4x.h
+    float tempHumidity = humidity.relative_humidity + humCorrection; // Adafruit_SHT4x.h
+
     rssi = WiFi.RSSI();
     // если считанные показания разумны
     if ((tempTemperature < 30) && (tempTemperature > 5) && (tempHumidity < 93) && (tempHumidity > 30)) {
@@ -234,7 +247,7 @@ void loop() {
   if (millis() - openMonTmr >= openMonPeriod) {                            // Если прошло время, и можно отправлять - работаем.
     openMonTmr = millis();                                                 // сбрасываем таймер отправки данных
     String buf;                                                            // Буфер для отправки
-    buf += F("http://open-monitoring.online/get?cid=****&key=*********="); //OpenMonitoring: формируем заголовок
+    buf += F("http://open-monitoring.online/get?cid=2661&key="*******";"); //OpenMonitoring: формируем заголовок
     buf += Temperature;                                                    //OpenMonitoring: вывод температуры подвала
     buf += F("&p2=");
     buf += Humidity;                                                       //OpenMonitoring: вывод влажности подвала
@@ -253,7 +266,7 @@ void loop() {
     buf += F("#ESP32");
     buf += WiFi.macAddress();
     buf += F("\r\n");
-    buf.replace(":", "");                               // ****************  // идентификатор прибора
+    buf.replace(":", "");                               // "************"  // идентификатор прибора
     buf += F("#Temp1#");
     buf += Temperature;
     buf += F("#Подвал\r\n");                            //NarodMon: вывод температуры подвала
@@ -272,14 +285,12 @@ void loop() {
 
 }  // end Loop
 
-//_____________________________________________________________________________________________________
-// Процедура showScreen() выводит на экран значения температуры, состояние подогрева датчика, 
-// влажности, пинг WiFi и значение RSSI
+// Процедура showScreen() выводит на экран значения температуры, влажности, пинг WiFi и значение RSSI
 void showScreen() {
     oled.clear();                         // очищаем дисплей
     oled.setScale(2);                     // масштаб текста (1..4)
     oled.setCursor(0, 0);                 // курсор на начало 1 строки
-    oled.print("H  ");                    // вывод H 
+    oled.print("H ");                    // вывод H 
     oled.print(Humidity, 1);              // вывод значения Humidity
     oled.setCursor(0, 2);                 // курсор на начало 2 строки
     oled.print("T ");                     // вывод Т
@@ -297,6 +308,3 @@ void showScreen() {
     oled.print(rssi);                     // вывод значения RSSI.
     oled.update();    // Вывод содержимого буфера на дисплей. Только при работе с буфером.
 } // end showScreen
-
-
-
