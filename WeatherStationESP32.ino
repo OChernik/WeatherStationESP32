@@ -2,14 +2,14 @@
 // Экран SSH1106 1,3''  SDA - 21, SCL - 22
 // Esp32 с антенной ****************************
 //
-#define sensorReadPeriod 2000 // период между опросом датчика в мс.
+#define sensorReadPeriod 1000 // период между опросом датчика в мс.
 #define openMonPeriod 300000  // период между отправкой данных на сервер ОМ в мс.
 #define narodMonPeriod 600000 // период между отправкой данных на сервер NM в мс.
 #define checkWifiPeriod 30000 // период проверки состояния WiFi соединения в мс.
 #define pingPeriod 63000      // период измерения пинга
 #define heat3xPeriod 24*60*60*1000L // период включения нагрева датчика SHT3x (время МЕЖДУ включениями)
-#define heat3xTime 5*60*1000L   // время, на которое включается нагрев датчика SHT3x
-#define heat4xPeriod 55*1000L // период включения нагрева SHT4x 
+#define heat3xTime 5*60*1000L // время, на которое включается нагрев датчика SHT3x
+#define heat4xPeriod 57*1000L // период включения нагрева SHT4x 
 #define INIT_KEY 50           // ключ первого запуска EEPROM. 0-254, на выбор
 #define INIT_ADDR 0           // номер ячейки для хранения ключа
 #define WDT_TIMEOUT 30        // 30 секунд отсутствия отклика для перезагрузки через WDT
@@ -18,7 +18,7 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <Wire.h>
-// #include "Adafruit_SHT31.h"
+// #include "Adafruit_SHT31.h"  // библиотека датчиков температуры и влажности SHT3x
 #include "Adafruit_SHT4x.h"     // библиотека датчиков температуры и влажности SHT4х - может нагревать SHT4x
 #include <ESPmDNS.h>
 #include <WiFiUdp.h>
@@ -37,15 +37,15 @@ GyverOLED<SSH1106_128x64> oled;              // создание объекта 
 
 float Temperature;
 float Humidity = 50;
-uint8_t Png = 1;              // переменная измеренного значения пинга, мс
-int8_t rssi;
+uint8_t Png = 1;            // переменная измеренного значения пинга, мс
+int8_t rssi;                // переменная измеренного значения rssi, dB
 int8_t humCorrection = 0 ;  // начальная поправка измеренного значения влажности
 uint32_t sensorReadTmr = 0; // переменная таймера опроса датчиков
 uint32_t openMonTmr = 0;    // переменная таймера отсылки данных на сервер Open Monitoring
 uint32_t narodMonTmr = 0;   // переменная таймера отсылки данных на сервер NarodMon
 uint32_t checkWifiTmr = 0;  // переменная таймера  соединения WiFi
 uint32_t PingTmr = 0;       // переменная таймера пинга
-uint32_t heat3xTmr = millis(); // переменная таймера нагрева датчика 
+uint32_t heat3xTmr = millis(); // переменная таймера нагрева датчика SHT31
 uint32_t heat4xTmr = 0;      // переменная таймера нагрева датчика SHT41
 bool heatFlag = 0;           // флаг нагрева датчика
 
@@ -184,7 +184,7 @@ void loop() {
     heat4xTmr = millis();                     // сброс таймера
     sht4x.setHeater(SHT4X_HIGH_HEATER_1S);    // включаем режим максимального нагрева датчика SHT41 на 1 секунду 
     heatFlag = 1;                                                // поднимаем флаг включения нагрева датчика
-    sensors_event_t humidity, temp;                              // создаем структуру sensors_event_t
+    sensors_event_t humidity, temp;                              // объявляем структуры  humidity, temp
     sht4x.getEvent(&humidity, &temp);                            // считываем с датчика значения температуры и влажности
     float Temperature = temp.temperature;                        // присваиваем значение температуры
     float Humidity = humidity.relative_humidity + humCorrection; // присваиваем значение влажности 
@@ -212,8 +212,8 @@ void loop() {
   // if (tmr) hub.sendUpdate("Ping");
   // if (tmr) hub.sendUpdate("DeltaHum");
 
-  // если пришло время опроса датчиков и прошло больше 30 секунд с момента импульса нагрева датчика
-  if ((millis() - sensorReadTmr >= sensorReadPeriod) && (millis() - heat4xTmr >= 30000)){     
+  // если пришло время опроса датчиков и прошло больше 40 секунд с момента импульса нагрева датчика
+  if ((millis() - sensorReadTmr >= sensorReadPeriod) && (millis() - heat4xTmr >= 40000)){     
     sensorReadTmr = millis();                            // сброс таймера
     // float tempTemperature = sht3x.readTemperature();
     // float tempHumidity = sht3x.readHumidity() + humCorrection;
@@ -224,7 +224,7 @@ void loop() {
 
     rssi = WiFi.RSSI();
     // если считанные показания разумны
-    if ((tempTemperature < 30) && (tempTemperature > 5) && (tempHumidity < 93) && (tempHumidity > 30)) {
+    if ((tempTemperature < 30) && (tempTemperature > 5) && (tempHumidity < 93) && (tempHumidity > 20)) {
       Temperature = tempTemperature;
       Humidity = tempHumidity;
       showScreen();                      // вывод показаний датчиков на экран
