@@ -6,7 +6,7 @@
 #define openMonPeriod 5*60*1000L   // период между отправкой данных на сервер ОМ в мс.
 #define narodMonPeriod 10*60*1000L // период между отправкой данных на сервер NM в мс.
 #define checkWifiPeriod 30*1000L   // период проверки состояния WiFi соединения в мс.
-#define pingPeriod 63*1000L        // период измерения пинга
+#define pingPeriod 93*1000L        // период измерения пинга
 #define heat3xPeriod 24*60*60*1000L // период включения нагрева датчика SHT3x (время МЕЖДУ включениями)
 #define heat3xTime 5*60*1000L // время, на которое включается нагрев датчика SHT3x
 #define heat4xPeriod 57*1000L // период включения нагрева SHT4x 
@@ -19,9 +19,9 @@
 #include <HTTPClient.h>
 #include <Wire.h>
 // #include "Adafruit_SHT31.h"    // библиотека датчиков SHT3x
-#include "Adafruit_SHT4x.h"       // библиотека датчиков SHT4х - может нагревать SHT4x
-// #include <SensirionI2cSht4x.h> // библиотека датчиков SHT4х - может нагревать SHT4x
-// #include <SensirionI2cSht3x.h> // библиотека датчиков SHT3х - может нагревать SHT3x
+#include "Adafruit_SHT4x.h"       // библиотека датчиков SHT4х 
+// #include <SensirionI2cSht4x.h> // библиотека датчиков SHT4х 
+// #include <SensirionI2cSht3x.h> // библиотека датчиков SHT3х 
 #include <ESPmDNS.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>  //бибилотека ОТА обновления по WiFi 
@@ -32,16 +32,17 @@
 #include <ESP32Ping.h>    // библиотека проверки пинга
 // #include <EEManager.h>  // Gyver lib 
 
-// Adafruit_SHT31 sht3x = Adafruit_SHT31();    // создание объекта датчика sht3x
-// SensirionI2cSht3x sht3x;              // создание объекта датчика SHT3x библиотеки SensirionI2cSht3x
-// SensirionI2cSht4x sht4x;              // создание объекта датчика SHT4x библиотеки SensirionI2cSht4x
-
-Adafruit_SHT4x sht4x = Adafruit_SHT4x(); // создание объекта датчика SHT4x библиотеки Adafruit_SHT4x.h
-GyverOLED<SSH1106_128x64> oled;              // создание объекта экрана SSH1106 1,3''
+// Adafruit_SHT31 sht3x = Adafruit_SHT31(); // создание объекта датчика sht3x
+// SensirionI2cSht3x sht3x;                 // создание объекта датчика sht3x библиотеки SensirionI2cSht3x
+// SensirionI2cSht4x sht4x;                 // создание объекта датчика sht4x библиотеки SensirionI2cSht4x
+Adafruit_SHT4x sht4x = Adafruit_SHT4x();    // создание объекта датчика sht4x библиотеки Adafruit_SHT4x.h
+GyverOLED<SSH1106_128x64> oled;             // создание объекта экрана SSH1106 1,3''
 // GyverHub hub("MyDevices", "*********", "");
 
 float Temperature;
 float Humidity = 50;
+float tempTemperature;
+float tempHumidity;
 uint8_t Png = 1;            // переменная измеренного значения пинга, мс
 int8_t rssi;                // переменная измеренного значения rssi, dB
 int8_t humCorrection = 0 ;  // начальная поправка измеренного значения влажности
@@ -51,8 +52,8 @@ uint32_t narodMonTmr = 0;   // переменная таймера отсылк�
 uint32_t checkWifiTmr = 0;  // переменная таймера  соединения WiFi
 uint32_t PingTmr = 0;       // переменная таймера пинга
 uint32_t heat3xTmr = millis(); // переменная таймера нагрева датчика SHT31
-uint32_t heat4xTmr = 0;      // переменная таймера нагрева датчика SHT41
-bool heatFlag = 0;           // флаг нагрева датчика
+uint32_t heat4xTmr = 0;     // переменная таймера нагрева датчика SHT41
+bool heatFlag = 0;          // флаг нагрева датчика
 
 // EEManager memory(humCorrection, 2000); // передаём переменную в менеджер EEPROM. 2000 ms таймаут обновления
 
@@ -119,7 +120,7 @@ void setup() {
   }  
   
   Serial.begin(115200);
-  // sht3x.begin(0x44);                     // I2C address: 0x44 or 0x45
+  // sht3x.begin(0x44);                     // Adafruit_SHT31.h
   sht4x.begin();                            // Adafruit_SHT4x.h
   sht4x.setPrecision(SHT4X_HIGH_PRECISION); // Adafruit_SHT4x.h
   sht4x.setHeater(SHT4X_NO_HEATER);         // Adafruit_SHT4x.h
@@ -187,14 +188,15 @@ void loop() {
   //  (heatFlag) ? sht3x.enableHeater() : sht3x.disableHeater(); // переключаем нагрев датчика SensirionI2cSht3x.h  
   // } // end If
 
-  // подогреваем датчик SHT41 если Humidity > 75 
+  // подогреваем датчик SHT41 если Humidity > 77 
   // с периодом heat4xPeriod включаем прогрев датчика SHT41 на 1 секунду  
-  // начальные значения heat4xTmr = 0
+  // начальное значение heat4xTmr = 0
   if ((Humidity > 77) && (millis() - heat4xTmr >= heat4xPeriod)) {       
-    heat4xTmr = millis();                     // сброс таймера
+    heat4xTmr = millis();                                        // сброс таймера
+    bool tempFlag = heatFlag;                                    // запоминаем состояние heatFlag  
     heatFlag = 1;                                                // поднимаем флаг включения нагрева датчика
-    // sht4x.activateHighestHeaterPowerLong(Temperature, Humidity); // SensirionI2cSht4x.h 
-    // Humidity = Humidity + humCorrection;                         // SensirionI2cSht4x.h 
+    // sht4x.activateHighestHeaterPowerLong(Temperature, tempHumidity); // SensirionI2cSht4x.h 
+    // Humidity = tempHumidity + humCorrection;                  // SensirionI2cSht4x.h 
     sht4x.setHeater(SHT4X_HIGH_HEATER_1S);                       // Adafruit_SHT4x.h включаем режим максимального нагрева датчика SHT41 на 1 секунду 
     sensors_event_t humidity, temp;                              // Adafruit_SHT4x.h объявляем структуры  humidity, temp
     sht4x.getEvent(&humidity, &temp);                            // Adafruit_SHT4x.h считываем с датчика значения температуры и влажности
@@ -203,7 +205,7 @@ void loop() {
     sht4x.setHeater(SHT4X_NO_HEATER);                            // Adafruit_SHT4x.h выключаем режим нагрева датчика SHT41    
     showScreen();                                                // вывод показаний датчиков на экран
     delay(1000);
-    heatFlag = 0;
+    heatFlag = tempFlag;                                         // восстанавливаем состояние heatFlag
   } // end If
 
   if (millis() - PingTmr >= pingPeriod) {   // периодически измеряем время пинга  
@@ -230,8 +232,8 @@ void loop() {
     sensorReadTmr = millis();                                        // сброс таймера
     // float tempTemperature = sht3x.readTemperature();              // Adafruit_SHT31.h
     // float tempHumidity = sht3x.readHumidity() + humCorrection;    // Adafruit_SHT31.h
-    // sht3x.measureSingleShot(REPEATABILITY_HIGH, false, float tempTemperature, float tempHumidity); // SensirionI2cSht3x.h 
-    // sht4x.measureHighPrecision(float tempTemperature, float tempHumidity); // SensirionI2cSht4x.h    
+    // sht3x.measureSingleShot(REPEATABILITY_HIGH, false, tempTemperature, tempHumidity); // SensirionI2cSht3x.h 
+    // sht4x.measureHighPrecision(tempTemperature, tempHumidity);    // SensirionI2cSht4x.h    
     sensors_event_t humidity, temp;                                  // Adafruit_SHT4x.h
     sht4x.getEvent(&humidity, &temp);                                // Adafruit_SHT4x.h
     float tempTemperature = temp.temperature;                        // Adafruit_SHT4x.h
