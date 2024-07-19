@@ -21,7 +21,7 @@
 // #include "Adafruit_SHT31.h"    // библиотека датчиков SHT3x
 #include "Adafruit_SHT4x.h"       // библиотека датчиков SHT4х - может нагревать SHT4x
 // #include <SensirionI2cSht4x.h> // библиотека датчиков SHT4х - может нагревать SHT4x
-// #include <SensirionI2cSht3x.h> // библиотека датчиков SHT3х - может нагревать SHT4x
+// #include <SensirionI2cSht3x.h> // библиотека датчиков SHT3х - может нагревать SHT3x
 #include <ESPmDNS.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>  //бибилотека ОТА обновления по WiFi 
