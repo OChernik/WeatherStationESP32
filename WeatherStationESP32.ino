@@ -180,10 +180,10 @@ void loop() {
   //  (heatFlag) ? sht3x.enableHeater() : sht3x.disableHeater(); // переключаем нагрев датчика SensirionI2cSht3x.h  
   // } // end If
 
-  // подогреваем датчик SHT41 если Humidity > 77 
+  // подогреваем датчик SHT41 если Humidity > heat4xBorder 
   // с периодом heat4xPeriod включаем прогрев датчика SHT41 на 1 секунду  
   // начальное значение heat4xTmr = 0
-  if ((Humidity > 77) && (millis() - heat4xTmr >= heat4xPeriod)) {       
+  if ((Humidity > heat4xBorder) && (millis() - heat4xTmr >= heat4xPeriod)) {       
     heat4xTmr = millis();                                        // сброс таймера
     bool tempFlag = heatFlag;                                    // запоминаем состояние heatFlag  
     heatFlag = 1;                                                // поднимаем флаг включения нагрева датчика
