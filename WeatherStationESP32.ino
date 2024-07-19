@@ -7,6 +7,7 @@
 #define narodMonPeriod 10*60*1000L // период между отправкой данных на сервер NM в мс.
 #define checkWifiPeriod 30*1000L   // период проверки состояния WiFi соединения в мс.
 #define pingPeriod 93*1000L        // период измерения пинга
+#define oledInvertPeriod 60*1000L   // период инверсии дисплея
 #define heat3xPeriod 24*60*60*1000L // период включения нагрева датчика SHT3x (время МЕЖДУ включениями)
 #define heat3xTime 5*60*1000L  // время, на которое включается нагрев датчика SHT3x
 #define heat4xPeriod 117*1000L // период включения нагрева SHT4x 
@@ -50,7 +51,9 @@ uint32_t checkWifiTmr = 0;  // переменная таймера  соедин
 uint32_t PingTmr = 0;       // переменная таймера пинга
 uint32_t heat3xTmr = millis(); // переменная таймера нагрева датчика SHT31
 uint32_t heat4xTmr = 0;     // переменная таймера нагрева датчика SHT41
+uint32_t oledInvertTmr;     // переменная таймера инверсии дисплея
 bool heatFlag = 0;          // флаг нагрева датчика
+bool oledFlag = 0;          // флаг состояния инверсии дисплея
 
 // EEManager memory(humCorrection, 2000); // передаём переменную в менеджер EEPROM. 2000 ms таймаут обновления
 
@@ -121,9 +124,10 @@ void setup() {
   // sht3x.begin(Wire, SHT31_I2C_ADDR_44);  // SensirionI2cSht3x.h 
   sht4x.begin(Wire, SHT41_I2C_ADDR_44);     // SensirionI2cSht4x.h 
   
-  oled.init();                 // инициализация дисплея   
-  oled.setContrast(30);        // яркость 0..255
-  oled.textMode(BUF_REPLACE);  // вывод текста на экран с заменой символов
+  oled.init();                  // инициализация дисплея   
+  oled.setContrast(20);         // яркость 0..255
+  oled.textMode(BUF_REPLACE);   // вывод текста на экран с заменой символов
+  oled.invertDisplay(oledFlag); // вывод текста на экран с заменой символов
   
   initWiFi();                  // установили соединение WiFi
 
@@ -195,6 +199,12 @@ void loop() {
     heatFlag = tempFlag;                                         // восстанавливаем состояние heatFlag
   } // end If
 
+  if (millis() - oledInvertTmr >= oledInvertPeriod) { // периодически инвертируем дисплей
+    oledInvertTmr = millis();                         // сброс таймера
+    oledFlag = !oledFlag;                             // инвертируем флаг состояния дисплея
+    oled.invertDisplay(oledFlag);                     // инвертируем дисплей
+  } // end If
+  
   if (millis() - PingTmr >= pingPeriod) {   // периодически измеряем время пинга  
     PingTmr = millis();                     // сброс таймера
     bool p = Ping.ping(WiFi.gatewayIP());   // пингуем роутер  
