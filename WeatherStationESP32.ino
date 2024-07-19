@@ -121,8 +121,9 @@ void setup() {
   // sht3x.begin(Wire, SHT31_I2C_ADDR_44);  // SensirionI2cSht3x.h 
   sht4x.begin(Wire, SHT41_I2C_ADDR_44);     // SensirionI2cSht4x.h 
   
+  oled.init();                 // инициализация дисплея   
+  oled.setContrast(30);        // яркость 0..255
   oled.textMode(BUF_REPLACE);  // вывод текста на экран с заменой символов
-  oled.init();                 // инициализация дисплея
   
   initWiFi();                  // установили соединение WiFi
 
