@@ -9,7 +9,8 @@
 #define pingPeriod 93*1000L        // период измерения пинга
 #define heat3xPeriod 24*60*60*1000L // период включения нагрева датчика SHT3x (время МЕЖДУ включениями)
 #define heat3xTime 5*60*1000L // время, на которое включается нагрев датчика SHT3x
-#define heat4xPeriod 57*1000L // период включения нагрева SHT4x 
+#define heat4xPeriod 117*1000L // период включения нагрева SHT4x 
+#define heat4xBorder 75       // значение влажности, выше которого включается нагрев датчика SHT4x 
 #define INIT_KEY 50           // ключ первого запуска EEPROM. 0-254, на выбор
 #define INIT_ADDR 0           // номер ячейки для хранения ключа
 #define WDT_TIMEOUT 30        // 30 секунд отсутствия отклика для перезагрузки через WDT
@@ -18,10 +19,8 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <Wire.h>
-// #include "Adafruit_SHT31.h"    // библиотека датчиков SHT3x
-#include "Adafruit_SHT4x.h"       // библиотека датчиков SHT4х 
-// #include <SensirionI2cSht4x.h> // библиотека датчиков SHT4х 
-// #include <SensirionI2cSht3x.h> // библиотека датчиков SHT3х 
+// #include "Adafruit_SHT31.h"  // библиотека датчиков температуры и влажности SHT3x
+#include "Adafruit_SHT4x.h"     // библиотека датчиков температуры и влажности SHT4х - может нагревать SHT4x
 #include <ESPmDNS.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>  //бибилотека ОТА обновления по WiFi 
@@ -298,23 +297,31 @@ void loop() {
 
 }  // end Loop
 
-// Процедура showScreen() выводит на экран значения температуры, влажности, пинг WiFi и значение RSSI
+// Процедура showScreen() выводит на экран значения температуры, влажности, пинг WiFi, RSSI
+// и оставшееся время до импульса нагрева датчика 
 void showScreen() {
+    // время, оставшееся до включения нагрева датчика SHT4x
+    float counterDown = (heat4xPeriod - (millis() - heat4xTmr))/1000;  
     oled.clear();                         // очищаем дисплей
     oled.setScale(2);                     // масштаб текста (1..4)
     oled.setCursor(0, 0);                 // курсор на начало 1 строки
-    oled.print("H ");                    // вывод H 
+    oled.print("H ");                     // вывод H 
     oled.print(Humidity, 1);              // вывод значения Humidity
     oled.setCursor(0, 2);                 // курсор на начало 2 строки
     oled.print("T ");                     // вывод Т
     oled.print(Temperature, 1);           // вывод значения Temperature
-    oled.print((heatFlag) ? " On" : " Off"); // вывод "On" если датчик греется
+    if (Humidity <= heat4xBorder) { 
+      oled.print((heatFlag) ? " On" : " Off"); // вывод "On" если датчик греется
+     } else {
+      oled.print(" "); // вывод " " если датчик будет греться
+      oled.print(counterDown, 0);         // вывод значения counterDown     
+    }  // end IF
     oled.setCursor(0, 4);                 // курсор на начало 3 строки
     if (Png > 0) {                        // если существует значение пинга
-       oled.print("Ping ");               // вывод Ping           
-       oled.print(Png);                   // вывод времени пинга       
+      oled.print("Ping ");               // вывод Ping           
+      oled.print(Png);                   // вывод времени пинга       
      } else {
-       oled.print(" Ping Error !");       // вывод сообщения " Ping Error !"
+      oled.print(" Ping Error !");       // вывод сообщения " Ping Error !"
     }  // end IF
     oled.setCursor(0, 6);                 // курсор на начало 4 строки
     oled.print("RSSI ");                  // вывод RSSI
