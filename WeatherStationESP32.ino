@@ -268,18 +268,18 @@ void loop() {
     String buf;                                        // Буфер для отправки
     buf += F("#ESP32");
     buf += WiFi.macAddress();
-    buf += F("\r\n");
-    buf.replace(":", "");                               // ***************  // идентификатор прибора
+    buf += F("\n");
+    buf.replace(":", "");                             // ***************  // идентификатор прибора
     buf += F("#Temp1#");
     buf += Temperature;
-    buf += F("#Подвал\r\n");                            //NarodMon: вывод температуры подвала
+    buf += F("#Подвал\n");                            //NarodMon: вывод температуры подвала
     buf += F("#RH1#");
     buf+= Humidity;
-    buf += F("#Подвал\r\n");                            //NarodMon: вывод влажности подвала
+    buf += F("#Подвал\n");                            //NarodMon: вывод влажности подвала
     buf += F("#DBM#");
     buf += rssi;
-    buf += F("#Подвал\r\n");                            //NarodMon: вывод силы сигнала Wi-Fi, dBm
-    buf += F("##\r\n");                                 //NarodMon: закрываем пакет
+    buf += F("#Подвал\n");                            //NarodMon: вывод силы сигнала Wi-Fi, dBm
+    buf += F("##\n");                                 //NarodMon: закрываем пакет
     WiFiClient client;
     client.connect("narodmon.ru", 8283);  //NarodMon: Подключаемся
     client.print(buf);                    // И отправляем данные в сеть
