@@ -6,9 +6,9 @@
 #define openMonPeriod 5*60*1000L   // период между отправкой данных на сервер ОМ в мс.
 #define narodMonPeriod 10*60*1000L // период между отправкой данных на сервер NM в мс.
 #define checkWifiPeriod 30*1000L   // период проверки состояния WiFi соединения в мс.
-#define pingPeriod 193*1000L        // период измерения пинга
-#define heat3xPeriod 24*60*60*1000L // период включения нагрева датчика SHT3x (время МЕЖДУ включениями)
-#define oledInvertPeriod 60*1000L   // период инверсии дисплея
+#define pingPeriod 5*60*1000L      // период измерения пинга
+#define heat3xPeriod 24*60*60*1000L// период включения нагрева датчика SHT3x (время МЕЖДУ включениями)
+#define oledInvertPeriod 60*1000L  // период инверсии дисплея
 #define heat3xTime 5*60*1000L      // время, на которое включается нагрев датчика SHT3x
 #define heat4xPeriod 120*1000L     // период включения нагрева SHT4x 
 #define heat4xBorder 75            // значение влажности, выше которого включается нагрев датчика SHT4x 
@@ -27,31 +27,12 @@
 #include <ArduinoOTA.h>            //бибилотека ОТА обновления по WiFi 
 #include <GyverOLED.h>             //библиотека дисплея 
 #include <Arduino.h>
-// #include <GyverHub.h>
-#include <EEPROM.h>
+#include <MyTimer.h>               // тестовая библиотека таймера
+#include <GyverHub.h>              // GyverHub 
+#include <EEPROM.h>                // стандартная библиотека управления энергонезависимой памятью
 #include <ESP32Ping.h>             // библиотека проверки пинга
-// #include <EEManager.h>          // Gyver lib 
 
-class MyTimer {
-  public:
-    MyTimer(uint32_t prd) {
-      _prd = prd;
-      _tmr = 0;      
-    }
-
-    bool tick() {
-      if ((millis() - _tmr) >= _prd) {
-        _tmr = millis();
-        return true;
-      } else return false;      
-    }
-
-  private:
-    uint32_t _tmr;
-    uint32_t _prd;    
-}; // end class MyTimer
-
-// SensirionI2cSht3x sht3x;                 // создание объекта датчика sht3x библиотеки SensirionI2cSht3x
+// SensirionI2cSht3x sht3x;               // создание объекта датчика sht3x библиотеки SensirionI2cSht3x
 SensirionI2cSht4x sht4x;                  // создание объекта датчика sht4x библиотеки SensirionI2cSht4x
 GyverOLED<SSH1106_128x64> oled;           // создание объекта экрана SSH1106 1,3''
 HTTPClient http;                          // создаем объект http библиотеки HTTPClient
@@ -61,16 +42,15 @@ MyTimer heat4xTmr(heat4xPeriod);          // создаем объект heat4xT
 MyTimer pingTmr(pingPeriod);              // создаем объект pingTmr таймера MyTimer с периодом pingPeriod
 MyTimer checkWifiTmr(checkWifiPeriod);    // создаем объект checkWifiTmr таймера MyTimer с периодом checkWifiPeriod
 MyTimer sensorReadTmr(sensorReadPeriod);  // создаем объект sensorReadTmr таймера MyTimer с периодом sensorReadPeriod
+GyverHub hub;                             // создаем объект GyverHub
 
-// GyverHub hub("MyDevices", "*********", "");
-
-float Temperature;          // значение температуры
-float Humidity = 50;        // значение влажности
+float temperature;          // значение температуры
+float humidity = 50;        // значение влажности
 float tempTemperature;      // первичное значение температуры с датчика до проверки на выброс
 float tempHumidity;         // первичное значение влажности с датчика до проверки на выброс
 uint8_t Png = 1;            // переменная измеренного значения пинга, мс
 int8_t rssi;                // переменная измеренного значения rssi, dB
-int8_t humCorrection = -1 ; // начальная поправка измеренного значения влажности
+int8_t humCorrection = 0;   // поправка измеренного значения влажности
 uint32_t heat3xTmr = millis(); // переменная таймера нагрева датчика SHT31
 uint32_t openMonTmr = 0;       // переменная таймера отправки сообщений на сервер open-monitoring.online
 uint32_t narodMonTmr = 0;   // переменная таймера отсылки данных на сервер NarodMon
@@ -78,42 +58,25 @@ uint32_t heat4xTime = 0;    // переменная времени начала 
 bool heatFlag = 0;          // флаг нагрева датчика
 bool oledFlag = 0;          // флаг состояния инверсии дисплея
 
-// EEManager memory(humCorrection, 2000); // передаём переменную в менеджер EEPROM. 2000 ms таймаут обновления
-
-// const char* ssid = ""*****";";
-// const char* password = ""*****";";
-const char* ssid = ""*****";";
+// const char* ssid = "*****";
+// const char* password = "*****";
+const char* ssid = "*****";
 const char* password = "*****";
-// WiFiServer server(80);
 
-// это наш билдер. Он будет вызываться библиотекой
-// для сборки интерфейса, чтения значений и проч.
-// void build() {
-//     // добавим заголовок
-//     hub.Title(F("Климат на полке"));
-//     // BeginWidgets() начинает новую горизонтальную строку виджетов
-//     hub.BeginWidgets();
-//      // сменим ширину на 100%
-//     hub.WidgetSize(100);
-//     // сделаем ещё один label с личным именем, к функции добавится _
-//     // ниже в loop будем отправлять обновления на его имя
-//     hub.Label_(F("Temp"), String(Temperature), F("Температура"));     // метка со значением температуры
-//     hub.Label_(F("Hum"), String(Humidity), F("Влажность"));           // метка со значением влажности
-//     hub.Label_(F("Rssi"), String(rssi), F("Сигнал WiFi"));            // метка со значением уровня сигнала
-//     hub.Label_(F("Ping"), String(Png), F("Пинг до роутера, мс"));     // метка со значением времени пинга
-//     hub.Label_(F("DeltaHum"), String(humCorrection), F("Поправка датчика влажности")); // метка с поправкой влажности
-//     // Добавили слайдер с подключенной переменной humCorrection
-//     if (hub.Slider(&humCorrection, GH_INT8, F("Поправка датчика влажности, %"), -10, 10, 1)) {
-//      // Добавили крутилку с подключенной переменной humCorrection
-//      // if (hub.Spinner(&humCorrection, GH_INT8, F("Поправка датчика влажности, %"), -10, 10, 1)) {
-//      // Добавили текстовый ввод с подключенной переменной humCorrection
-//      // if (hub.Input(&humCorrection, GH_INT8, F("Поправка датчика влажности, %"))) {  
-//       hub.sendUpdate("DeltaHum", String(humCorrection)); // обновляем значение метки с humCorrection
-//       EEPROM.write(1, humCorrection);          // записали измененное значение humCorrection
-//       EEPROM.commit();                         // сохранили изменения в эмулированной ЕЕПРОМ во флеш памяти для esp8266/esp32      
-//     }    
-//     hub.EndWidgets();    
-// }   // end void build()
+void build(gh::Builder& b) {     // билдер GyverHub. 
+  b.Title(F("Климат на полке")); // добавим заголовок
+  // добавляем горизонтальный контейнер
+  // функции beginRow() и beginCol() всегда возвращают true
+  if (b.beginRow()) {  
+   b.Label_(F("Temp"), temperature).label(F("Температура")).color(gh::Colors::Red);
+   b.Label_(F("Hum"), humidity).label(F("Влажность")).color(gh::Colors::Aqua);
+   b.endRow();  
+  }
+  if (b.Slider(&humCorrection).range(-10, 10, 1).label(F("Поправка влажности")).click()) { // слайдер
+   EEPROM.write(1, humCorrection);    // записали измененное значение humCorrection
+   EEPROM.commit();                   // сохранили изменения в эмулированной ЕЕПРОМ во флеш памяти для esp8266/esp32
+  }; 
+}  // end void build()
 
 void initWiFi() {                             // Функция для установки WiFi соединения 
   WiFi.mode(WIFI_STA);
@@ -128,19 +91,17 @@ void initWiFi() {                             // Функция для уста�
 
 void setup() {
 
-  esp_task_wdt_init(WDT_TIMEOUT, true); //enable panic so ESP32 restarts
-  esp_task_wdt_add(NULL);               //add current thread to WDT watch
+  esp_task_wdt_init(WDT_TIMEOUT, true);       //enable panic so ESP32 restarts
+  esp_task_wdt_add(NULL);                     //add current thread to WDT watch
 
-  EEPROM.begin(2);                          // инициализация на ESP32 ЕЕРROM размером 2 байта
-  // запускаем менеджер EEPROM, указав адрес и ключ запуска. Он сам проверит ключ, 
-  // а также прочитает данные из EEPROM (если они там есть) и запишет в переменную.
-  // memory.begin(0, INIT_KEY);   // передаем стартовый адрес записи и ключ 
-  
+  EEPROM.begin(2);                            // инициализация на ESP32 ЕЕРROM размером 2 байта  
   if (EEPROM.read(INIT_ADDR) != INIT_KEY) {   // в случае первого запуска
     EEPROM.write(INIT_ADDR, INIT_KEY);        // записали ключ  
     EEPROM.write(1, humCorrection);           // записали стандартное значение humCorrection
     EEPROM.commit();                          // сохранили изменения в эмулированной ЕЕПРОМ во флеш памяти для esp8266/esp32
-  }  
+   } else {
+    humCorrection = EEPROM.read(1);           // восстановилии ранее записанное значение humCorrection
+  }
   
   Serial.begin(115200);
   Wire.begin();                             // SensirionI2cSht3x.h and SensirionI2cSht4x.h 
@@ -153,9 +114,7 @@ void setup() {
   oled.invertDisplay(oledFlag); // вывод текста на экран с заменой символов
   
   initWiFi();                  // установили соединение WiFi
-
-  // server.begin();
-  
+ 
   ArduinoOTA
     .onStart([]() {
       String type;
@@ -185,9 +144,10 @@ void setup() {
   ArduinoOTA.setHostname("ESP32_MeteoStation");
   ArduinoOTA.begin();
 
-  // hub.setupMQTT("test.mosquitto.org", 1883);
-  // hub.onBuild(build);     // подключаем билдер
-  // hub.begin();            // запускаем систему
+  hub.mqtt.config("test.mosquitto.org", 1883);
+  hub.config(F("ChernikDevices"), F("Basement"), F("f6d9"));
+  hub.onBuild(build);
+  hub.begin();
 }  // end void Setup()
 
 void loop() {
@@ -196,10 +156,13 @@ void loop() {
   
   ArduinoOTA.handle();  // Включаем поддержку ОТА
 
-  // hub.tick();           // обязательно тикаем тут для нормальной работы конструктора интерфейса
-
-  // memory.tick();        // здесь произойдёт запись EEPROM по встроенному таймеру
-
+  hub.tick();                  // обязательно тикаем тут для нормальной работы конструктора интерфейса
+  static gh::Timer tmr(2000);  // период 2 секунды  
+  if (tmr) {                   // если прошел период
+    hub.sendUpdate("Temp");    // обновляем значение температуры
+    hub.sendUpdate("Hum");     // обновляем значение влажности
+  }
+  
   // с периодом heatPeriod включаем прогрев датчика SHT31 на время heatTime
   // начальные значения heatFlag = 0, heatTmr = millis()
   // if (millis() - heat3xTmr >= (heatFlag ? heat3xTime : heat3xPeriod)) {       
@@ -210,12 +173,12 @@ void loop() {
 
   // подогреваем датчик SHT41 если Humidity > heat4xBorder 
   // с периодом heat4xPeriod включаем прогрев датчика SHT41 на 1 секунду  
-  if ((Humidity > heat4xBorder) && heat4xTmr.tick()) { 
+  if ((humidity > heat4xBorder) && heat4xTmr.tick()) { 
     bool tempFlag = heatFlag;                                    // запоминаем состояние heatFlag  
     heatFlag = 1;                                                // поднимаем флаг включения нагрева датчика
     heat4xTime = millis();                                       // сохраняем время начала нагрева датчика
-    sht4x.activateHighestHeaterPowerLong(Temperature, tempHumidity); // SensirionI2cSht4x.h 
-    Humidity = tempHumidity + humCorrection;                         // SensirionI2cSht4x.h
+    sht4x.activateHighestHeaterPowerLong(temperature, tempHumidity); // SensirionI2cSht4x.h 
+    humidity = tempHumidity + humCorrection;                         // SensirionI2cSht4x.h
     showScreen();                                                // вывод показаний датчиков на экран
     delay(1000);
     heatFlag = tempFlag;                                         // восстанавливаем состояние heatFlag
@@ -236,14 +199,6 @@ void loop() {
     }    
   } // end If
   
-  // static GHtimer tmr(1000);    // обновим метки с именами Temp, Hum, Rssi, Ping, DeltaHum по таймеру каждую 1 секунду
-  
-  // if (tmr) hub.sendUpdate("Temp");
-  // if (tmr) hub.sendUpdate("Hum");
-  // if (tmr) hub.sendUpdate("Rssi");
-  // if (tmr) hub.sendUpdate("Ping");
-  // if (tmr) hub.sendUpdate("DeltaHum");
-  
   // если пришло время опроса датчиков 
   if (sensorReadTmr.tick()){     
     // sht3x.measureSingleShot(REPEATABILITY_HIGH, false, tempTemperature, tempHumidity); // SensirionI2cSht3x.h 
@@ -251,8 +206,8 @@ void loop() {
     rssi = WiFi.RSSI();
     // если считанные показания разумны
     if ((tempTemperature < 100) && (tempTemperature > 5) && (tempHumidity < 93) && (tempHumidity > 20)) {
-      Temperature = tempTemperature;
-      Humidity = tempHumidity + humCorrection;
+      temperature = tempTemperature;
+      humidity = tempHumidity + humCorrection;
       showScreen();                      // вывод показаний датчиков на экран
     }    
   }  // end if 
@@ -270,9 +225,9 @@ void loop() {
     String buf;                                                            // Буфер для отправки
     buf.reserve(90);                                                       // Буфер для отправки
     buf += F("http://open-monitoring.online/get?cid=2661&key=*****="); //OpenMonitoring: формируем заголовок
-    buf += Temperature;                                                    //OpenMonitoring: вывод температуры подвала
+    buf += temperature;                                                    //OpenMonitoring: вывод температуры подвала
     buf += F("&p2=");
-    buf += Humidity;                                                       //OpenMonitoring: вывод влажности подвала
+    buf += humidity;                                                       //OpenMonitoring: вывод влажности подвала
     buf += F("&p4=");
     buf += rssi;                                                        //OpenMonitoring: вывод силы сигнала Wi-Fi, dBm
     http.begin(buf.c_str());                                            // отправляем сформированную строку
@@ -282,22 +237,22 @@ void loop() {
 
   // Если пришло время очередной отправки и прошло заданное время с момента последнего нагрева датчика 
   if (((millis() - narodMonTmr) >= narodMonPeriod) && ((millis() - heat4xTime) >= (heat4xPeriod - 3000))) {      
-    narodMonTmr = millis();                           // сбрасываем таймер отправки данных
-    String buf;                                       // Буфер для отправки
+    narodMonTmr = millis();               // сбрасываем таймер отправки данных
+    String buf;                           // Буфер для отправки
     buf += F("#ESP32");
     buf += WiFi.macAddress();
     buf += F("\n");
-    buf.replace(":", "");                             //   // идентификатор прибора
+    buf.replace(":", "");                 // *****  // идентификатор прибора
     buf += F("#Temp1#");
-    buf += Temperature;
-    buf += F("#Подвал\n");                            //NarodMon: вывод температуры подвала
+    buf += temperature;
+    buf += F("#Подвал\n");                //NarodMon: вывод температуры подвала
     buf += F("#RH1#");
-    buf+= Humidity;
-    buf += F("#Подвал\n");                            //NarodMon: вывод влажности подвала
+    buf+= humidity;
+    buf += F("#Подвал\n");                //NarodMon: вывод влажности подвала
     buf += F("#DBM#");
     buf += rssi;
-    buf += F("#Подвал\n");                            //NarodMon: вывод силы сигнала Wi-Fi, dBm
-    buf += F("##\n");                                 //NarodMon: закрываем пакет
+    buf += F("#Подвал\n");                //NarodMon: вывод силы сигнала Wi-Fi, dBm
+    buf += F("##\n");                     //NarodMon: закрываем пакет
     client.connect("narodmon.ru", 8283);  //NarodMon: Подключаемся
     client.print(buf.c_str());            // И отправляем данные в сеть
     client.stop();                        // Разрываем соединение с сервером
@@ -314,12 +269,12 @@ void showScreen() {
     oled.setScale(2);                     // масштаб текста (1..4)
     oled.setCursor(0, 0);                 // курсор на начало 1 строки
     oled.print("H ");                     // вывод H 
-    oled.print(Humidity, 1);              // вывод значения Humidity
+    oled.print(humidity, 1);              // вывод значения Humidity
     oled.setCursor(0, 2);                 // курсор на начало 2 строки
     oled.print("T ");                     // вывод Т
-    oled.print(Temperature, 1);           // вывод значения Temperature
+    oled.print(temperature, 1);           // вывод значения Temperature
 
-    if (Humidity <= heat4xBorder) {       // если значение влажности меньше heat4xBorder
+    if (humidity <= heat4xBorder) {       // если значение влажности меньше heat4xBorder
       oled.print((heatFlag) ? " On" : " Off"); // вывод "On" если датчик греется
      } else {                             // если значение влажности больше heat4xBorder
       oled.print(" ");                    // вывод " " если датчик будет греться
