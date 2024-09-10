@@ -131,13 +131,13 @@ void setup() {
       else if (error == OTA_END_ERROR) Serial.println("End Failed");
     });
 
-  ArduinoOTA.setHostname("ESP32_MeteoStation");
-  ArduinoOTA.begin();
+  ArduinoOTA.setHostname("ESP32_MeteoStation");  // устанавливаем название устройства, видимое в сети
+  ArduinoOTA.begin();                            // запускаем ArduinoOTA
 
-  hub.mqtt.config("test.mosquitto.org", 1883);
-  hub.config(hubPrefix, F("Basement"), F("f6d9"));
-  hub.onBuild(build);
-  hub.begin();
+  hub.mqtt.config("test.mosquitto.org", 1883);     // конфигурируем MQTT сервер
+  hub.config(hubPrefix, F("Basement"), F("f6d9")); // конфигурируем Gyverhub
+  hub.onBuild(build);                              // запускаем Gyverhub
+  hub.begin();                                     // запускаем Gyverhub
 }  // end void Setup()
 
 //LOOP______________________________________________________________________________________________________________________________
@@ -145,7 +145,7 @@ void loop() {
 
   esp_task_wdt_reset();  // сбрасываем Watch Dog Timer чтобы не прошла перезагрузка  
   
-  ArduinoOTA.handle();  // Включаем поддержку ОТА
+  ArduinoOTA.handle();   // включаем поддержку ОТА
 
   hub.tick();                  // тикаем для нормальной работы конструктора интерфейса
   static gh::Timer tmr(2000);  // период 2 секунды  
@@ -165,7 +165,7 @@ void loop() {
   // подогреваем датчик SHT41 если Humidity > heat4xBorder 
   // с периодом heat4xPeriod включаем прогрев датчика SHT41 на 1 секунду  
   if ((humidity > heat4xBorder) && heat4xTmr.tick()) { 
-    heat4xTime = millis();                                           // сохраняем время начала нагрева датчика
+    heat4xStart = millis();                                          // сохраняем время начала нагрева датчика
     sht4x.activateHighestHeaterPowerLong(temperature, tempHumidity); // SensirionI2cSht4x.h 
     humidity = tempHumidity + humCorrection;                         // SensirionI2cSht4x.h
     showScreen();                                                    // вывод показаний датчиков на экран
@@ -231,7 +231,7 @@ void sendToNarodMon() {
     buf += F("#ESP32");
     buf += WiFi.macAddress();
     buf += F("\n");
-    buf.replace(":", "");                 // *****  // идентификатор прибора
+    buf.replace(":", "");                 // убираем из строки символы ":"
     buf += F("#Temp1#");
     buf += temperature;
     buf += F("#Подвал\n");                //NarodMon: вывод температуры подвала
