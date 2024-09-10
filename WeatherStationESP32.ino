@@ -264,7 +264,7 @@ void sendToOpenMon() {
     http.end();                                                         // Free resources
 }
 
-// функция showScreen() выводит на экран значения температуры, влажности, пинг WiFi, RSSI
+// функция showScreen() выводит на экран значения температуры, влажности, RSSI
 // и оставшееся время до импульса нагрева датчика 
 void showScreen() {
     // counterDown это время, оставшееся до включения нагрева датчика SHT4x
@@ -286,16 +286,7 @@ void showScreen() {
     }  // end IF
 
     oled.setCursor(0, 4);                 // курсор на начало 3 строки
-
-    if (Png > 0) {                        // если существует значение пинга
-      oled.print("Ping ");                // вывод Ping           
-      oled.print(Png);                    // вывод времени пинга       
-     } else {
-      oled.print(" Ping Error !");        // вывод сообщения " Ping Error !"
-    }  // end IF
-
-    oled.setCursor(0, 6);                 // курсор на начало 4 строки
     oled.print("RSSI ");                  // вывод RSSI
     oled.print(rssi);                     // вывод значения RSSI.
-    oled.update();    // Вывод содержимого буфера на дисплей. Только при работе с буфером.
+    oled.update();                        // Вывод содержимого буфера на дисплей. Только при работе с буфером.
 } // end showScreen
