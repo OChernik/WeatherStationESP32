@@ -13,7 +13,6 @@ const char* hubPrefix = "*****";  // Gyverhub prefix
 
 #ifdef USE_SHT31                    // если используется датчик SHT31
 #define heat3xTime 5*60*1000L       // время, на которое включается нагрев датчика SHT3x
-#define heat3xBorder 70             // значение влажности, выше которого включается нагрев датчика SHT3x 
 #include <SensirionI2cSht3x.h>      // библиотека датчиков температуры и влажности SHT3х
 SensirionI2cSht3x sht3x;            // создание объекта датчика sht3x библиотеки SensirionI2cSht3x
 #endif
@@ -24,8 +23,8 @@ SensirionI2cSht3x sht3x;            // создание объекта датч�
 SensirionI2cSht4x sht4x;           // создание объекта датчика sht4x библиотеки SensirionI2cSht4x
 #endif
 
-#define heat4xPeriod 120*1000L     // период включения нагрева SHT4x 
-#define heat3xPeriod 24*60*60*1000L // период включения нагрева датчика SHT3x (время МЕЖДУ включениями)
+#define heat4xPeriod 120*1000L     // период включения нагрева SHT4x в условиях высокой влажности 
+#define heatPeriod  24*60*60*1000L // период безусловного включения нагрева любого датчика  (время МЕЖДУ включениями)
 #define sensorReadPeriod 1000      // период между опросом датчика в мс.
 #define openMonPeriod 5*60*1000L   // период между отправкой данных на сервер ОМ в мс.
 #define narodMonPeriod 10*60*1000L // период между отправкой данных на сервер NM в мс.
@@ -40,8 +39,8 @@ SensirionI2cSht4x sht4x;           // создание объекта датчи
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <Wire.h>
-#include <ESPmDNS.h>
-#include <WiFiUdp.h>
+// #include <ESPmDNS.h>
+// #include <WiFiUdp.h>
 #include <ArduinoOTA.h>            //бибилотека ОТА обновления по WiFi 
 #include <GyverOLED.h>             //библиотека дисплея 
 #include <Arduino.h>
@@ -55,6 +54,7 @@ HTTPClient http;                          // создаем объект http б
 WiFiClient client;                        // создаем объект client библиотеки WiFiClient
 MyTimer oledTmr(oledInvertPeriod);        // создаем объект oledTmr таймера MyTimer с периодом oledInvertPeriod
 MyTimer heat4xTmr(heat4xPeriod);          // создаем объект heat4xTmr таймера MyTimer с периодом heat4xPeriod
+MyTimer heatTmr(heatPeriod);              // создаем объект heatTmr таймера MyTimer с периодом heatPeriod
 MyTimer checkWifiTmr(checkWifiPeriod);    // создаем объект checkWifiTmr таймера MyTimer с периодом checkWifiPeriod
 MyTimer sensorReadTmr(sensorReadPeriod);  // создаем объект sensorReadTmr таймера MyTimer с периодом sensorReadPeriod
 GyverHub hub;                             // создаем объект GyverHub
@@ -69,7 +69,7 @@ int8_t humCorrection = 0;   // поправка измеренного знач�
 uint32_t heat3xTmr = 0;     // переменная таймера нагрева датчика SHT31
 uint32_t openMonTmr = 0;    // переменная таймера отправки сообщений на сервер open-monitoring.online
 uint32_t narodMonTmr = 0;   // переменная таймера отсылки данных на сервер NarodMon
-uint32_t heat4xStart = 0;   // переменная времени начала нагрева датчика SHT41
+uint32_t heatStart = 0;     // переменная времени начала нагрева датчика 
 bool heatFlag = 0;          // флаг нагрева датчика SHT31
 bool oledFlag = 0;          // флаг состояния инверсии дисплея
 
@@ -172,13 +172,17 @@ void loop() {
   }
 
   #ifdef USE_SHT31                         // если используется датчик SHT31
-  // с периодом heat3xPeriod включаем прогрев датчика SHT31 на время heat3xTime
-  // нагрев включается если измеренная влажность больше heat3xBorder
+  // с периодом heatPeriod включаем прогрев датчика SHT31 на время heat3xTime
   // начальные значения heat3xFlag = 0, heat3xTmr = 0
-  if ((humidityGarage > heat3xBorder) && (millis() - heat3xTmr >= (heatFlag ? heat3xTime : heat3xPeriod))) {       
+  if (millis() - heat3xTmr >= (heatFlag ? heat3xTime : heatPeriod)) {       
    heat3xTmr = millis();                   // сброс таймера
    heatFlag = !heatFlag;                   // переключаем флаг состояния нагрева датчика
-   (heatFlag) ? sht3x.enableHeater() : sht3x.disableHeater(); // переключаем нагрев датчика SensirionI2cSht3x.h  
+   if (heatFlag) {
+     sht3x.enableHeater();
+     heatStart = millis();
+   } else {
+     sht3x.disableHeater();
+   }  // end if   
   } // end If
   #endif  
   
@@ -186,7 +190,7 @@ void loop() {
   // подогреваем датчик SHT41 если Humidity > heat4xBorder 
   // с периодом heat4xPeriod включаем прогрев датчика SHT41 на 1 секунду  
   if ((humidity > heat4xBorder) && heat4xTmr.tick()) { 
-    heat4xStart = millis();                                          // сохраняем время начала нагрева датчика
+    heatStart = millis();                                            // сохраняем время начала нагрева датчика
     sht4x.activateHighestHeaterPowerLong(temperature, tempHumidity); // SensirionI2cSht4x.h 
     humidity = tempHumidity + humCorrection;                         // SensirionI2cSht4x.h
     showScreen();                                                    // вывод показаний датчиков на экран
@@ -224,13 +228,13 @@ void loop() {
   }
  
   // Если пришло время очередной отправки на open-monitoring.online и прошло заданное время с момента последнего нагрева датчика 
-  if ((millis() - openMonTmr) >= openMonPeriod && (millis() - heat4xStart) > (heat4xPeriod - 3000)) {
+  if ((millis() - openMonTmr) >= openMonPeriod && (millis() - heatStart) > (heat4xPeriod - 3000)) {
     openMonTmr = millis();               // сбрасываем таймер отправки данных  
     sendToOpenMon();                     // отправляем данные на open-monitoring.online
   }                                      // end if (sendtoOM)
 
   // Если пришло время очередной отправки на NarodMon и прошло заданное время с момента последнего нагрева датчика 
-  if (((millis() - narodMonTmr) >= narodMonPeriod) && ((millis() - heat4xStart) >= (heat4xPeriod - 3000))) {      
+  if (((millis() - narodMonTmr) >= narodMonPeriod) && ((millis() - heatStart) >= (heat4xPeriod - 3000))) {      
     narodMonTmr = millis();               // сбрасываем таймер отправки данных
     sendToNarodMon();                     // отправляем данные на NarodMon
   }                                       // end if (sendtonm)
@@ -305,7 +309,7 @@ void showScreen() {
      
    #ifdef USE_SHT41                       // если используется датчик SHT41
     // counterDown это время, оставшееся до включения нагрева датчика SHT4x
-    float counterDown = (heat4xPeriod - (millis() - heat4xStart))/1000;  
+    float counterDown = (heat4xPeriod - (millis() - heatStart))/1000;  
     if (humidity > heat4xBorder) {       // если значение влажности больше heat4xBorder       
       oled.print(counterDown, 0);        // вывод значения времени до начала нагрева counterDown     
     }  // end IF  
