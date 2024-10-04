@@ -54,7 +54,6 @@ HTTPClient http;                          // создаем объект http б
 WiFiClient client;                        // создаем объект client библиотеки WiFiClient
 MyTimer oledTmr(oledInvertPeriod);        // создаем объект oledTmr таймера MyTimer с периодом oledInvertPeriod
 MyTimer heat4xTmr(heat4xPeriod);          // создаем объект heat4xTmr таймера MyTimer с периодом heat4xPeriod
-MyTimer heatTmr(heatPeriod);              // создаем объект heatTmr таймера MyTimer с периодом heatPeriod
 MyTimer checkWifiTmr(checkWifiPeriod);    // создаем объект checkWifiTmr таймера MyTimer с периодом checkWifiPeriod
 MyTimer sensorReadTmr(sensorReadPeriod);  // создаем объект sensorReadTmr таймера MyTimer с периодом sensorReadPeriod
 GyverHub hub;                             // создаем объект GyverHub
@@ -66,10 +65,9 @@ float tempTemperature;      // первичное значение темпер�
 float tempHumidity;         // первичное значение влажности с датчика до проверки на выброс
 int8_t rssi;                // переменная измеренного значения rssi, dB
 int8_t humCorrection = 0;   // поправка измеренного значения влажности
-uint32_t heat3xTmr = 0;     // переменная таймера нагрева датчика SHT31
+uint32_t heatTmr = 0;       // переменная таймера нагрева датчиков
 uint32_t openMonTmr = 0;    // переменная таймера отправки сообщений на сервер open-monitoring.online
 uint32_t narodMonTmr = 0;   // переменная таймера отсылки данных на сервер NarodMon
-uint32_t heatStart = 0;     // переменная времени начала нагрева датчика 
 bool heatFlag = 0;          // флаг нагрева датчика SHT31
 bool oledFlag = 0;          // флаг состояния инверсии дисплея
 
@@ -169,33 +167,29 @@ void loop() {
   if (tmr) {                   // если прошел период
     hub.sendUpdate("Temp");    // обновляем значение температуры
     hub.sendUpdate("Hum");     // обновляем значение влажности
-  }
+  }  
 
-  #ifdef USE_SHT31                         // если используется датчик SHT31
+  #ifdef USE_SHT31                         // если используется датчик SHT31     
   // с периодом heatPeriod включаем прогрев датчика SHT31 на время heat3xTime
-  // начальные значения heat3xFlag = 0, heat3xTmr = 0
-  if (millis() - heat3xTmr >= (heatFlag ? heat3xTime : heatPeriod)) {       
-   heat3xTmr = millis();                   // сброс таймера
+  // начальные значения heatFlag = 0, heatTmr = 0
+  if (millis() - heatTmr >= (heatFlag ? heat3xTime : heatPeriod)) {       
+   heatTmr = millis();                     // сброс таймера
    heatFlag = !heatFlag;                   // переключаем флаг состояния нагрева датчика
-   if (heatFlag) {
-     sht3x.enableHeater();
-     heatStart = millis();
-   } else {
-     sht3x.disableHeater();
-   }  // end if   
+   if (heatFlag) sht3x.enableHeater();     
+   else sht3x.disableHeater();       
   } // end If
   #endif  
   
   #ifdef USE_SHT41                         // если используется датчик SHT41
-  // подогреваем датчик SHT41 если Humidity > heat4xBorder 
-  // с периодом heat4xPeriod включаем прогрев датчика SHT41 на 1 секунду  
-  if ((humidity > heat4xBorder) && heat4xTmr.tick()) { 
-    heatStart = millis();                                            // сохраняем время начала нагрева датчика
+  // подогреваем датчик SHT41 если Humidity > heat4xBorder с периодом heat4xPeriod на 1 секунду  
+  // или если пришло время ежесуточного прогрева датчика SHT41
+  if (((humidity > heat4xBorder) && heat4xTmr.tick()) || ((millis() - heatTmr) > heatPeriod)) { 
+    heatTmr = millis();                                              // сброс таймера
     sht4x.activateHighestHeaterPowerLong(temperature, tempHumidity); // SensirionI2cSht4x.h 
     humidity = tempHumidity + humCorrection;                         // SensirionI2cSht4x.h
     showScreen();                                                    // вывод показаний датчиков на экран
     delay(1000);                                                     // чтобы успеть увидеть цифры после нагрева    
-  } // end If
+  } // end If 
   #endif  
 
   if (oledTmr.tick()) {                               // если пришло время инвертировать дисплей
